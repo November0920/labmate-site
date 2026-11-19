@@ -33,6 +33,7 @@
     candidateSource: $("#candidateSource"),
     candidateKeywords: $("#candidateKeywords"),
     candidateAutoApprove: $("#candidateAutoApprove"),
+    candidateDraft: $("#candidateDraft"),
     candidateReset: $("#candidateReset")
   };
 
@@ -118,6 +119,7 @@
   };
 
   const isTrustedSource = (source) => /(课程实验指导书|课程指导书|实验指导书|教师\s*PPT|官方文档)/i.test(String(source || ""));
+  const isPlaceholderSource = (source) => /(示例|请核对|待核对|TODO)/i.test(String(source || ""));
 
   const candidates = loadCandidates();
   candidates
@@ -320,6 +322,65 @@
     note: entry.note
   });
 
+  const draftFor = (query) => {
+    const text = String(query || "").toLowerCase();
+    if (/(df\s*-h|磁盘|分区|根分区|no space|100%|磁盘满|空间不足)/i.test(text)) {
+      return {
+        cause: ["日志文件或旧内核占用空间", "Docker 镜像/容器/构建缓存占用", "数据库或临时文件持续增长"],
+        steps: ["df -h 查看根分区使用率", "du -sh /* 逐层定位大目录", "清理日志、旧内核或无用镜像", "再次执行 df -h 验证"],
+        verify: ["df -h 显示根分区使用率下降", "关键服务仍可正常启动"],
+        source: "课程实验指导书·Linux 存储章节（示例，请核对）"
+      };
+    }
+    if (/(wireshark|抓包|看不到包|捕获过滤器)/i.test(text)) {
+      return {
+        cause: ["选错网卡", "捕获过滤器写错", "流量未经过当前接口"],
+        steps: ["确认当前网卡", "清空捕获过滤器后再抓", "复现一次目标流量", "检查是否抓到目标协议"],
+        verify: ["能看到目标协议包", "包数量随操作变化"],
+        source: "课程实验指导书·网络实验章节（示例，请核对）"
+      };
+    }
+    if (/(apt|could not get lock|\/var\/lib\/apt|软件包锁)/i.test(text)) {
+      return {
+        cause: ["另一个 apt/dpkg 进程正在运行", "上次安装异常退出留下锁文件", "自动更新服务占用锁"],
+        steps: ["ps aux | grep -E 'apt|dpkg' 查进程", "等待进程结束或结束异常进程", "确认无进程后清理锁文件", "重新执行 apt update"],
+        verify: ["apt update 不再报锁错误", "软件包列表正常更新"],
+        source: "课程实验指导书·Linux 软件源章节（示例，请核对）"
+      };
+    }
+    if (/(ssl|certificate|证书|https|tls)/i.test(text)) {
+      return {
+        cause: ["系统 CA 证书缺失或过期", "代理/抓包工具替换了证书", "目标站点证书链不完整"],
+        steps: ["确认系统时间正确", "检查 CA 证书包是否安装", "暂时关闭代理复现", "用 curl -v 查看证书链"],
+        verify: ["curl -v 能完成 TLS 握手", "浏览器不再提示证书错误"],
+        source: "课程实验指导书·网络与证书章节（示例，请核对）"
+      };
+    }
+    return {
+      cause: ["当前信息不足：尚未确认操作系统、完整报错和复现步骤"],
+      steps: ["补充操作系统与工具版本", "粘贴完整报错", "记录复现步骤后再判断"],
+      verify: ["能稳定复现并看到完整错误"],
+      source: "课程实验指导书·待核对章节（示例，请核对）"
+    };
+  };
+
+  const fillCandidateDraft = () => {
+    if (!nodes.candidateForm) return;
+    const query = `${nodes.candidateSymptom.value || ""} ${nodes.candidateTitle.value || ""}`.trim();
+    const draft = draftFor(query);
+    nodes.candidateCause.value = draft.cause.join("\n");
+    nodes.candidateSteps.value = draft.steps.join("\n");
+    nodes.candidateVerify.value = draft.verify.join("\n");
+    if (!nodes.candidateKeywords.value.trim()) {
+      nodes.candidateKeywords.value = deriveKeywords(query).join(", ");
+    }
+    if (!nodes.candidateSource.value.trim()) {
+      nodes.candidateSource.value = draft.source;
+    }
+    nodes.candidateError.textContent = "";
+    nodes.candidateStatus.textContent = "已填入示例草稿；来源是示例占位，自动通过不会生效，请核对并替换为真实出处。";
+  };
+
   const resetCandidateForm = () => {
     if (!nodes.candidateForm) return;
     nodes.candidateForm.reset();
@@ -424,6 +485,7 @@
       nodes.candidateAutoApprove
       && nodes.candidateAutoApprove.checked
       && isTrustedSource(source)
+      && !isPlaceholderSource(source)
     );
     const existing = candidates.find(
       (item) => item.status === "pending" && item.title === title && item.symptom === symptom
@@ -804,6 +866,7 @@
 
   if (nodes.candidateForm) {
     nodes.candidateForm.addEventListener("submit", saveCandidate);
+    if (nodes.candidateDraft) nodes.candidateDraft.addEventListener("click", fillCandidateDraft);
     nodes.candidateReset.addEventListener("click", resetCandidateForm);
     nodes.candidateList.addEventListener("click", (event) => {
       const button = event.target.closest("button[data-action]");
