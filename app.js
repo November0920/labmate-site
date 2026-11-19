@@ -379,6 +379,9 @@
     }
     nodes.candidateError.textContent = "";
     nodes.candidateStatus.textContent = "已填入示例草稿；来源是示例占位，自动通过不会生效，请核对并替换为真实出处。";
+    if (nodes.candidateStatus.scrollIntoView) {
+      nodes.candidateStatus.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   };
 
   const resetCandidateForm = () => {
