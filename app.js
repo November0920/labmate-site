@@ -32,6 +32,7 @@
     candidateVerify: $("#candidateVerify"),
     candidateSource: $("#candidateSource"),
     candidateKeywords: $("#candidateKeywords"),
+    candidateAutoApprove: $("#candidateAutoApprove"),
     candidateReset: $("#candidateReset")
   };
 
@@ -80,7 +81,7 @@
     return {
       id: candidate.id,
       file: candidate.source || "候选知识库",
-      section: "人工审核通过",
+      section: candidate.autoApproved ? "可信来源自动通过" : "人工审核通过",
       caseNo: "CAND",
       title: candidate.title,
       subtitle: candidate.symptom,
@@ -105,14 +106,18 @@
           title: "引用来源",
           source: {
             file: candidate.source,
-            section: "人工审核通过",
-            detail: "该条目来自候选池，经人工审核后加入本地知识库；生产环境应再由教师/助教复核。"
+            section: candidate.autoApproved ? "可信来源自动通过" : "人工审核通过",
+            detail: candidate.autoApproved
+              ? "该条目来源命中课程实验指导书/教师 PPT/官方文档白名单，按演示开关自动通过；生产环境仍应抽检。"
+              : "该条目来自候选池，经人工审核后加入本地知识库；生产环境应再由教师/助教复核。"
           }
         }
       ],
       note: "该条目由 LabMate 候选池生成，只用于本地演示；生产环境需要来源复核和版本管理。"
     };
   };
+
+  const isTrustedSource = (source) => /(课程实验指导书|课程指导书|实验指导书|教师\s*PPT|官方文档)/i.test(String(source || ""));
 
   const candidates = loadCandidates();
   candidates
@@ -382,6 +387,7 @@
     }
 
     candidate.status = "approved";
+    candidate.autoApproved = false;
     if (!KB.some((entry) => entry.id === candidate.id)) KB.push(toKBEntry(candidate));
     saveCandidates();
     renderCandidateList();
@@ -414,6 +420,11 @@
 
     const source = nodes.candidateSource.value.trim();
     const keywords = splitKeywords(nodes.candidateKeywords.value);
+    const autoApprove = Boolean(
+      nodes.candidateAutoApprove
+      && nodes.candidateAutoApprove.checked
+      && isTrustedSource(source)
+    );
     const existing = candidates.find(
       (item) => item.status === "pending" && item.title === title && item.symptom === symptom
     );
@@ -426,14 +437,23 @@
     candidate.source = source;
     candidate.keywords = keywords.length ? keywords : deriveKeywords(`${title} ${symptom}`);
     candidate.confidence = 0.6;
+    candidate.autoApproved = autoApprove;
+    candidate.status = autoApprove ? "approved" : "pending";
     candidate.createdAt = candidate.createdAt || new Date().toISOString();
 
     if (!existing) candidates.push(candidate);
+    if (autoApprove && !KB.some((entry) => entry.id === candidate.id)) {
+      KB.push(toKBEntry(candidate));
+    }
     saveCandidates();
     renderCandidateList();
-    nodes.candidateStatus.textContent = source
-      ? "已加入候选池，等待人工审核。"
-      : "已加入候选池；补全来源后才能审核通过。";
+    if (autoApprove) {
+      nodes.candidateStatus.textContent = "来源命中可信白名单，已按演示开关自动通过并加入本地知识库；建议仍抽检。";
+    } else {
+      nodes.candidateStatus.textContent = source
+        ? "已加入候选池，等待人工审核。"
+        : "已加入候选池；补全来源后才能审核通过。";
+    }
     nodes.candidateForm.reset();
   };
 

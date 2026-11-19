@@ -479,6 +479,14 @@ h1 {
 .candidate-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .candidate-actions .button { padding: 8px 12px; font-size: 9px; }
 .candidate-error { min-height: 1.4em; margin: 0; color: var(--red); font-size: 9.5px; line-height: 1.6; }
+.candidate-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px; border: 1px solid rgba(255,198,109,.2);
+  border-radius: 8px; background: rgba(255,198,109,.045);
+  color: #d8c39d; font-size: 9.5px; line-height: 1.5; cursor: pointer;
+}
+.candidate-toggle input { width: 14px; height: 14px; flex: none; accent-color: var(--amber); }
+.candidate-hint-small { margin-top: -4px; color: #5d7296; font-size: 8.5px; }
 .candidate-cta {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   margin-top: 14px; padding: 12px; border: 1px solid rgba(255,198,109,.24);
