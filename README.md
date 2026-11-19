@@ -16,7 +16,7 @@ node server.js
 ```text
 index.html          页面结构
 styles.css          视觉与响应式布局
-app.js              对话、检索、五段式渲染、安全边界
+app.js              对话、检索、五段式渲染、四角色 trace、候选池、安全边界
 data/kb.js          三类课程知识库与答案模板
 assets/favicon.svg  站点图标
 server.js           零依赖静态服务器 + /api/health
@@ -29,8 +29,18 @@ server.js           零依赖静态服务器 + /api/health
 - 输入其他问题，返回“信息不足”，要求补充实验名称、系统、完整报错，不编造来源。
 - 知识库命中时展示文件名与章节；演示版不连接真实模型。
 - 结果卡展示四个前端角色：`ScopeAgent → RetrievalAgent → DiagnosisAgent → ReviewAgent`，共 4 条 `AGENT TRACE`。
+- 未命中知识库时，结果卡出现“生成知识候选”；候选经人工审核后写入浏览器 `localStorage`，再次提问同一问题可命中。
 
 > 说明：AgentArts 平台内仍是单 Agent；四角色是网站演示层的前端编排，不是平台内四个独立 Agent。
+
+## 知识扩展（候选池）
+
+1. 在 Demo 输入知识库未覆盖的问题（例如 `Wireshark 抓包看不到包`）。
+2. 点击“生成知识候选”，补全原因、步骤、验证、来源和关键词。
+3. 保存为待审核，到页面“知识扩展”区点击“通过”。
+4. 再次提问同一问题，候选会作为本地知识条目参与检索，并显示来源与置信度。
+
+候选不会自动写入 AgentArts 知识库，只保存在当前浏览器的 `localStorage`（key：`labmate.kb.candidates.v1`）；换浏览器或清缓存会丢失。这是有意的 Human-in-the-loop 设计，避免把模型幻觉固化成知识。
 
 ## 部署
 
@@ -46,4 +56,5 @@ server.js           零依赖静态服务器 + /api/health
 - 网站是课程演示，不是生产系统。
 - AgentArts Managed Agent 当前为 v4；平台内为单 Agent，知识库命中测试在 AgentArts 知识库页面完成，平台版未开放知识库直连。
 - 公网域名根路径返回 404，不作为公网网站；演示以本网站和 Playground 截图为准。
+- 知识候选只存在浏览器本地，不自动写入 AgentArts 知识库，也不跨设备同步。
 - 不提供真实攻击、提权、免杀或破坏性命令指导；不代写课程报告。

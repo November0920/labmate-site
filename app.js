@@ -2,6 +2,7 @@
   "use strict";
 
   const KB = Array.isArray(window.LABMATE_KB) ? window.LABMATE_KB : [];
+  const STORAGE_KEY = "labmate.kb.candidates.v1";
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -17,13 +18,106 @@
     resultCard: $("#resultCard"),
     resultEmpty: $("#resultEmpty"),
     resultContent: $("#resultContent"),
-    demo: $("#demo")
+    demo: $("#demo"),
+    candidateForm: $("#candidateForm"),
+    candidateList: $("#candidateList"),
+    candidateCount: $("#candidateCount"),
+    candidateEmpty: $("#candidateEmpty"),
+    candidateStatus: $("#candidateStatus"),
+    candidateError: $("#candidateError"),
+    candidateTitle: $("#candidateTitle"),
+    candidateSymptom: $("#candidateSymptom"),
+    candidateCause: $("#candidateCause"),
+    candidateSteps: $("#candidateSteps"),
+    candidateVerify: $("#candidateVerify"),
+    candidateSource: $("#candidateSource"),
+    candidateKeywords: $("#candidateKeywords"),
+    candidateReset: $("#candidateReset")
   };
 
   if (!nodes.chatLog || !nodes.chatForm || !nodes.resultCard) return;
 
   const initialChat = nodes.chatLog.innerHTML;
-  const state = { busy: false };
+  const state = { busy: false, lastQuery: "" };
+
+  const splitLines = (value) => String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const splitKeywords = (value) => String(value || "")
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const loadCandidates = () => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((item) => item && item.id) : [];
+    } catch (error) {
+      return [];
+    }
+  };
+
+  const saveCandidates = () => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates));
+    } catch (error) {
+      // localStorage 不可用时，候选只在当前页面会话生效。
+    }
+  };
+
+  const deriveKeywords = (text) => {
+    const words = String(text || "").toLowerCase().match(/[a-z0-9\u4e00-\u9fa5]{2,}/g) || [];
+    return Array.from(new Set(words)).slice(0, 8);
+  };
+
+  const toKBEntry = (candidate) => {
+    const keywords = candidate.keywords && candidate.keywords.length
+      ? candidate.keywords
+      : deriveKeywords(`${candidate.title} ${candidate.symptom}`);
+    return {
+      id: candidate.id,
+      file: candidate.source || "候选知识库",
+      section: "人工审核通过",
+      caseNo: "CAND",
+      title: candidate.title,
+      subtitle: candidate.symptom,
+      confidence: "0.60",
+      question: candidate.symptom,
+      badge: "候选通过",
+      tags: keywords.slice(0, 3),
+      keywords,
+      local: true,
+      sections: [
+        { title: "问题定位", body: candidate.symptom },
+        {
+          title: "可能原因",
+          items: candidate.cause && candidate.cause.length ? candidate.cause : ["待补充：根据实际实验环境确认。"]
+        },
+        { title: "解决步骤", items: candidate.steps },
+        {
+          title: "验证方法",
+          items: candidate.verify && candidate.verify.length ? candidate.verify : ["按步骤复现，观察结果是否变化。"]
+        },
+        {
+          title: "引用来源",
+          source: {
+            file: candidate.source,
+            section: "人工审核通过",
+            detail: "该条目来自候选池，经人工审核后加入本地知识库；生产环境应再由教师/助教复核。"
+          }
+        }
+      ],
+      note: "该条目由 LabMate 候选池生成，只用于本地演示；生产环境需要来源复核和版本管理。"
+    };
+  };
+
+  const candidates = loadCandidates();
+  candidates
+    .filter((item) => item.status === "approved" && !KB.some((entry) => entry.id === item.id))
+    .forEach((item) => KB.push(toKBEntry(item)));
 
   const el = (tag, className, text) => {
     const node = document.createElement(tag);
@@ -221,6 +315,128 @@
     note: entry.note
   });
 
+  const resetCandidateForm = () => {
+    if (!nodes.candidateForm) return;
+    nodes.candidateForm.reset();
+    nodes.candidateError.textContent = "";
+    nodes.candidateStatus.textContent = "";
+  };
+
+  const openCandidate = (query) => {
+    if (!nodes.candidateForm) return;
+    nodes.candidateForm.reset();
+    nodes.candidateTitle.value = `待审核：${String(query || "").slice(0, 28)}`;
+    nodes.candidateSymptom.value = query || "";
+    nodes.candidateKeywords.value = deriveKeywords(query).join(", ");
+    nodes.candidateError.textContent = "";
+    nodes.candidateStatus.textContent = "";
+    nodes.candidateForm.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => nodes.candidateTitle.focus({ preventScroll: true }), 280);
+  };
+
+  const renderCandidateList = () => {
+    if (!nodes.candidateList) return;
+    const pending = candidates.filter((item) => item.status === "pending");
+    nodes.candidateCount.textContent = `${pending.length} 待审核`;
+    nodes.candidateEmpty.hidden = pending.length > 0;
+    nodes.candidateList.replaceChildren();
+
+    pending.forEach((candidate) => {
+      const card = el("article", "candidate-card");
+      const head = el("div", "candidate-head");
+      head.appendChild(el("strong", "", candidate.title));
+      head.appendChild(el("span", "", "PENDING"));
+      card.appendChild(head);
+      card.appendChild(el("p", "", candidate.symptom));
+
+      const meta = el("div", "candidate-meta");
+      meta.appendChild(el("span", "", candidate.source ? `来源：${candidate.source}` : "来源：未填"));
+      meta.appendChild(el("span", "", `${candidate.keywords.length} 个关键词`));
+      card.appendChild(meta);
+
+      const actions = el("div", "candidate-card-actions");
+      const approve = el("button", "approve", "审核通过");
+      approve.type = "button";
+      approve.dataset.action = "approve";
+      approve.dataset.id = candidate.id;
+      const reject = el("button", "", "拒绝");
+      reject.type = "button";
+      reject.dataset.action = "reject";
+      reject.dataset.id = candidate.id;
+      actions.append(approve, reject);
+      card.appendChild(actions);
+      nodes.candidateList.appendChild(card);
+    });
+  };
+
+  const approveCandidate = (id) => {
+    const candidate = candidates.find((item) => item.id === id && item.status === "pending");
+    if (!candidate) return;
+    if (!candidate.source || !candidate.source.trim()) {
+      nodes.candidateError.textContent = "审核通过前必须填写来源；没有来源的候选不能进入知识库。";
+      return;
+    }
+    if (!candidate.steps.length) {
+      nodes.candidateError.textContent = "解决步骤不能为空。";
+      return;
+    }
+
+    candidate.status = "approved";
+    if (!KB.some((entry) => entry.id === candidate.id)) KB.push(toKBEntry(candidate));
+    saveCandidates();
+    renderCandidateList();
+    nodes.candidateError.textContent = "";
+    nodes.candidateStatus.textContent = "已通过审核并加入本地知识库；重新提问即可命中。";
+    nodes.candidateForm.reset();
+  };
+
+  const rejectCandidate = (id) => {
+    const candidate = candidates.find((item) => item.id === id && item.status === "pending");
+    if (!candidate) return;
+    candidate.status = "rejected";
+    saveCandidates();
+    renderCandidateList();
+    nodes.candidateError.textContent = "";
+    nodes.candidateStatus.textContent = "已拒绝；该候选不会进入知识库。";
+  };
+
+  const saveCandidate = (event) => {
+    event.preventDefault();
+    const title = nodes.candidateTitle.value.trim();
+    const symptom = nodes.candidateSymptom.value.trim();
+    const steps = splitLines(nodes.candidateSteps.value);
+    nodes.candidateError.textContent = "";
+
+    if (!title || !symptom || !steps.length) {
+      nodes.candidateError.textContent = "标题、症状、解决步骤至少各填一项。";
+      return;
+    }
+
+    const source = nodes.candidateSource.value.trim();
+    const keywords = splitKeywords(nodes.candidateKeywords.value);
+    const existing = candidates.find(
+      (item) => item.status === "pending" && item.title === title && item.symptom === symptom
+    );
+    const candidate = existing || { id: `kb-local-${Date.now()}`, status: "pending" };
+    candidate.title = title;
+    candidate.symptom = symptom;
+    candidate.cause = splitLines(nodes.candidateCause.value);
+    candidate.steps = steps;
+    candidate.verify = splitLines(nodes.candidateVerify.value);
+    candidate.source = source;
+    candidate.keywords = keywords.length ? keywords : deriveKeywords(`${title} ${symptom}`);
+    candidate.confidence = 0.6;
+    candidate.createdAt = candidate.createdAt || new Date().toISOString();
+
+    if (!existing) candidates.push(candidate);
+    saveCandidates();
+    renderCandidateList();
+    nodes.candidateStatus.textContent = source
+      ? "已加入候选池，等待人工审核。"
+      : "已加入候选池；补全来源后才能审核通过。";
+    nodes.candidateForm.reset();
+  };
+
   const classify = (raw) => {
     const text = raw.trim();
     if (!text) return "empty";
@@ -231,6 +447,10 @@
     if (/(ping|网络|网关|dns|ipconfig|ip addr|route|不通|超时|icmp)/i.test(text)) return "ping";
     if (/(docker|容器|端口|port|8080|映射|already allocated|address already in use|占用)/i.test(text)) return "docker";
     if (/(permission|denied|权限|chmod|chown|sudo|root|只读|拒绝访问|无法写入)/i.test(text)) return "permission";
+
+    const localEntry = KB.find((entry) => entry.local && Array.isArray(entry.keywords)
+      && entry.keywords.some((keyword) => keyword && text.toLowerCase().includes(String(keyword).toLowerCase())));
+    if (localEntry) return localEntry.id;
 
     if (/^(你好|hi|hello|在吗|嗨|hey)/i.test(text)) return "greeting";
     return "unknown";
@@ -311,14 +531,22 @@
       nodes.resultContent.appendChild(el("p", "result-note", answer.note));
     }
 
+    if (answer.kind === "unknown") {
+      const cta = el("div", "candidate-cta");
+      const copy = el("p", "", "这个问题没有命中知识库。可以让 Agent 先生成一条候选，补来源后再审核。");
+      const button = el("button", "button button-ghost", "生成知识候选");
+      button.type = "button";
+      button.addEventListener("click", () => openCandidate(state.lastQuery));
+      cta.append(copy, button);
+      nodes.resultContent.appendChild(cta);
+    }
+
     nodes.resultContent.scrollTop = 0;
   };
 
   const responseFor = (category) => {
-    if (category === "ping" || category === "docker" || category === "permission") {
-      const entry = KB.find((item) => item.id === category);
-      return entry ? kbAnswer(entry) : unknownAnswer();
-    }
+    const entry = KB.find((item) => item.id === category);
+    if (entry) return kbAnswer(entry);
     if (category === "report" || category === "danger") return safetyAnswer(category);
     if (category === "greeting") return { kind: "greeting" };
     return unknownAnswer();
@@ -347,14 +575,21 @@
       unknown: "未命中三类实验故障，需要补充信息",
       empty: "输入为空"
     };
+    const entry = KB.find((item) => item.id === category);
     const status = category === "report" || category === "danger"
       ? "block"
       : category === "unknown" || category === "empty" || category === "greeting"
         ? "warn"
-        : "pass";
+        : entry ? "pass" : "warn";
     return {
       category,
-      trace: traceItem("ScopeAgent", "范围判定", status, summaries[category] || "无法判定", startedAt)
+      trace: traceItem(
+        "ScopeAgent",
+        "范围判定",
+        status,
+        summaries[category] || (entry ? `范围内：候选知识「${entry.title}」` : "无法判定"),
+        startedAt
+      )
     };
   };
 
@@ -366,22 +601,16 @@
         trace: traceItem("RetrievalAgent", "知识库检索", "skip", "越界请求，不检索知识库", startedAt)
       };
     }
-    if (["ping", "docker", "permission"].includes(scope.category)) {
-      const entry = KB.find((item) => item.id === scope.category) || null;
-      return {
-        entry,
-        trace: traceItem(
-          "RetrievalAgent",
-          "知识库检索",
-          entry ? "pass" : "warn",
-          entry ? `命中 ${entry.file}（置信度 ${entry.confidence}）` : "知识库未命中",
-          startedAt
-        )
-      };
-    }
+    const entry = KB.find((item) => item.id === scope.category) || null;
     return {
-      entry: null,
-      trace: traceItem("RetrievalAgent", "知识库检索", "warn", "没有对应知识库条目", startedAt)
+      entry,
+      trace: traceItem(
+        "RetrievalAgent",
+        "知识库检索",
+        entry ? "pass" : "warn",
+        entry ? `命中 ${entry.file}（置信度 ${entry.confidence}）` : "知识库未命中",
+        startedAt
+      )
     };
   };
 
@@ -472,6 +701,7 @@
     const category = classify(text);
     if (category === "empty") return;
 
+    state.lastQuery = text;
     addMessage("user", text);
     setBusy(true);
     nodes.chatInput.value = "";
@@ -551,6 +781,18 @@
       }, 460);
     });
   });
+
+  if (nodes.candidateForm) {
+    nodes.candidateForm.addEventListener("submit", saveCandidate);
+    nodes.candidateReset.addEventListener("click", resetCandidateForm);
+    nodes.candidateList.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-action]");
+      if (!button) return;
+      if (button.dataset.action === "approve") approveCandidate(button.dataset.id);
+      if (button.dataset.action === "reject") rejectCandidate(button.dataset.id);
+    });
+    renderCandidateList();
+  }
 
   const closeNav = () => {
     if (!nodes.siteNav || !nodes.navToggle) return;

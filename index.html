@@ -32,6 +32,7 @@
       <a href="#demo">在线排障</a>
       <a href="#capabilities">能力</a>
       <a href="#knowledge">知识库</a>
+      <a href="#expansion">知识扩展</a>
       <a href="#architecture">架构</a>
       <a href="#evaluation">评测</a>
       <a class="nav-cta" href="#demo">开始排障 <span aria-hidden="true">↗</span></a>
@@ -220,6 +221,73 @@
       <p class="knowledge-note reveal">当前平台版 Managed Agents 未开放知识库直连；知识库命中测试在 AgentArts 知识库页面完成，完整 RAG 流程由本地演示呈现。</p>
     </section>
 
+    <section class="section section-shell" id="expansion">
+      <div class="section-head reveal">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot"></span> KNOWLEDGE EXPANSION</div>
+          <h2>知识库不够时，<br />让它长出候选条目。</h2>
+        </div>
+        <p>Agent 发现未命中后生成结构化候选；只有补全来源、通过人工审核，才会写入本地知识库。演示版存在浏览器 localStorage，不写生产库。</p>
+      </div>
+
+      <div class="expansion-grid">
+        <div class="candidate-panel reveal">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">REVIEW QUEUE</span>
+              <h3>候选池</h3>
+            </div>
+            <span class="candidate-count" id="candidateCount">0 待审核</span>
+          </div>
+          <div class="candidate-list" id="candidateList"></div>
+          <p class="candidate-empty" id="candidateEmpty">还没有候选。先在 Demo 里问一个知识库外的问题，再点“生成知识候选”。</p>
+          <p class="candidate-status" id="candidateStatus" role="status"></p>
+        </div>
+
+        <form class="candidate-form reveal delay-1" id="candidateForm">
+          <div class="panel-top">
+            <div>
+              <span class="panel-kicker">CANDIDATE DRAFT</span>
+              <h3>结构化候选</h3>
+            </div>
+            <span class="candidate-flag">HUMAN REVIEW</span>
+          </div>
+          <input type="hidden" id="candidateId" />
+          <label>标题
+            <input id="candidateTitle" type="text" required placeholder="例如：Wireshark 抓包：先选网卡" />
+          </label>
+          <label>症状 / 原始报错
+            <textarea id="candidateSymptom" rows="2" required placeholder="用户问题或报错原文"></textarea>
+          </label>
+          <div class="form-row">
+            <label>可能原因（每行一条）
+              <textarea id="candidateCause" rows="3" placeholder="选错网卡&#10;过滤器写错"></textarea>
+            </label>
+            <label>解决步骤（每行一条）
+              <textarea id="candidateSteps" rows="3" required placeholder="确认网卡&#10;设置捕获过滤器"></textarea>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>验证方法（每行一条）
+              <textarea id="candidateVerify" rows="3" placeholder="能看到目标协议包"></textarea>
+            </label>
+            <label>关键词（逗号分隔）
+              <input id="candidateKeywords" type="text" placeholder="wireshark, 抓包, 网卡" />
+            </label>
+          </div>
+          <label>来源（审核通过必填）
+            <input id="candidateSource" type="text" placeholder="课程实验指导书 / 教师 PPT / 真实报错记录" />
+          </label>
+          <p class="candidate-hint">没有来源的候选不能通过；通过后会加入本地知识库，刷新仍保留。</p>
+          <div class="candidate-actions">
+            <button class="button button-primary" type="submit">保存为待审核</button>
+            <button class="button button-ghost" type="button" id="candidateReset">清空表单</button>
+          </div>
+          <p class="candidate-error" id="candidateError" role="alert"></p>
+        </form>
+      </div>
+    </section>
+
     <section class="section section-shell" id="architecture">
       <div class="section-head reveal">
         <div>
@@ -332,7 +400,7 @@
   <footer class="site-footer section-shell">
     <div class="footer-brand"><span class="brand-mark small">LM</span><strong>LabMate</strong></div>
     <p>课程项目 · 非生产系统 · 不提供真实攻击指导</p>
-    <div class="footer-links"><a href="#demo">Demo</a><a href="#knowledge">知识库</a><a href="#evaluation">评测</a><a href="#top">回到顶部 ↑</a></div>
+    <div class="footer-links"><a href="#demo">Demo</a><a href="#knowledge">知识库</a><a href="#expansion">知识扩展</a><a href="#evaluation">评测</a><a href="#top">回到顶部 ↑</a></div>
   </footer>
 
   <script src="data/kb.js"></script>
